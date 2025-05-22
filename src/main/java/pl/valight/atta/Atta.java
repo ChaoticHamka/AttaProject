@@ -27,20 +27,27 @@ public class Atta {
     static Map<String, Map<String, String>> allPagesData;
 
     private static Consumer<String> statusUpdater;
+    private static String inputPath;
+    private static String outputPath;
 
-    public static void runAttaDataSearch(Consumer<String> status) {
-
+    public Atta(Consumer<String> status, String inputPath, String outputPath) {
         statusUpdater = status;
+        this.inputPath = inputPath;
+        this.outputPath = outputPath;
+    }
+
+    public void runAttaDataSearch() {
+
         allPagesData = new LinkedHashMap<>();
 
         ChromeOptions options = new ChromeOptions();
         options.addArguments("--start-maximized");
+        options.addArguments("--headless=new");
 
         driver = new ChromeDriver(options);
         driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(10));
 
-        String filePath = "ean.txt";
-        try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
+        try (BufferedReader reader = new BufferedReader(new FileReader(inputPath))) {
             String ean;
 
             int numberEAN = 0;
@@ -170,10 +177,17 @@ public class Atta {
             sheet.autoSizeColumn(i);
         }
 
+        statusUpdater.accept("Создание Excel-файла...");
+
         // Сохраняем Excel-файл
-        try (FileOutputStream fileOut = new FileOutputStream("output_with_urls.xlsx")) {
+        try (FileOutputStream fileOut = new FileOutputStream(outputPath + File.separator + "output_with_urls.xlsx")) {
             workbook.write(fileOut);
+            statusUpdater.accept("Excel сохранён: " + outputPath + File.separator + "output_with_urls.xlsx");
+        } catch (Exception e) {
+            e.printStackTrace();
+            statusUpdater.accept("Ошибка при сохранении Excel: " + e.getMessage());
         }
+
         workbook.close();
 
         statusUpdater.accept("Excel сохранён как output_with_urls.xlsx");
