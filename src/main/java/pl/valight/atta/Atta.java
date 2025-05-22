@@ -16,6 +16,7 @@ import org.openqa.selenium.chrome.ChromeOptions;
 import java.io.*;
 import java.time.Duration;
 import java.util.*;
+import java.util.function.Consumer;
 
 public class Atta {
 
@@ -25,7 +26,13 @@ public class Atta {
 
     static Map<String, Map<String, String>> allPagesData;
 
-    public static void main(String[] args) {
+    private static Consumer<String> statusUpdater;
+
+    public static void runAttaDataSearch(Consumer<String> status) {
+
+        statusUpdater = status;
+        allPagesData = new LinkedHashMap<>();
+
         ChromeOptions options = new ChromeOptions();
         options.addArguments("--start-maximized");
 
@@ -36,17 +43,19 @@ public class Atta {
         try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
             String ean;
 
-            allPagesData = new LinkedHashMap<>();
+            int numberEAN = 0;
 
             // Чтение строк по одной
             while ((ean = reader.readLine()) != null) {
                 search(ean);
+                numberEAN++;
+                statusUpdater.accept("Собраны данные по ШК №" + numberEAN + " " + ean);
             }
 
             saveAsExcel();
 
         } catch (IOException e) {
-            System.out.println("Ошибка при чтении файла: " + e.getMessage());
+            statusUpdater.accept("Ошибка при чтении файла: " + e.getMessage());
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         } finally {
@@ -84,6 +93,9 @@ public class Atta {
 
         Map<String, String> productData = new LinkedHashMap<>();
 
+        productData.put("EAN", doc.getElementsByClass("ean").getFirst().text());
+        productData.put("Код производителя", doc.getElementsByClass("mpn").getFirst().text());
+
         for (Element table : doc.select("table")) {
             for (Element row : table.select("tr")) {
                 Elements cols = row.select("td");
@@ -104,7 +116,7 @@ public class Atta {
 //            Element name = nameElement.nextElementSibling();
 //            nameString = name.text();
 //        } catch (Exception e) {
-//            System.out.println("Название товара по ссылке " + href + " не нашлось");
+//            statusUpdater.accept("Название товара по ссылке " + href + " не нашлось");
 //        }
     }
 
@@ -115,7 +127,7 @@ public class Atta {
         gson.toJson(allPagesData, writer);
         writer.close();
 
-        System.out.println("Данные сохранены в output.json");
+        statusUpdater.accept("Данные сохранены в output.json");
     }
 
     private static void saveAsExcel() throws IOException {
@@ -164,6 +176,6 @@ public class Atta {
         }
         workbook.close();
 
-        System.out.println("Excel сохранён как output_with_urls.xlsx");
+        statusUpdater.accept("Excel сохранён как output_with_urls.xlsx");
     }
 }
