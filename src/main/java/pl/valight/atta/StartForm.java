@@ -32,6 +32,8 @@ public class StartForm {
             browseInputButton.addActionListener(e -> {
                 JFileChooser fileChooser = new JFileChooser(new File(desktopPath));
                 fileChooser.setDialogTitle("Выберите файл со ШК");
+                fileChooser.setSelectedFile(new File(desktopPath + File.separator + "ean.txt"));
+
                 int result = fileChooser.showOpenDialog(frame);
                 if (result == JFileChooser.APPROVE_OPTION) {
                     File selectedFile = fileChooser.getSelectedFile();
@@ -44,6 +46,7 @@ public class StartForm {
                 JFileChooser folderChooser = new JFileChooser(new File(desktopPath));
                 folderChooser.setDialogTitle("Выберите папку для сохранения Excel");
                 folderChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+                folderChooser.setSelectedFile(new File(desktopPath));
                 int result = folderChooser.showOpenDialog(frame);
                 if (result == JFileChooser.APPROVE_OPTION) {
                     File selectedDir = folderChooser.getSelectedFile();
@@ -96,7 +99,7 @@ public class StartForm {
 
             // Панель для выбора исходного файла
             JPanel inputPanel = new JPanel(new BorderLayout(5, 5));
-            inputPanel.setBorder(BorderFactory.createTitledBorder("Исходный JSON-файл"));
+            inputPanel.setBorder(BorderFactory.createTitledBorder("TXT-файл"));
             inputPanel.add(inputFileField, BorderLayout.CENTER);
             inputPanel.add(browseInputButton, BorderLayout.EAST);
 

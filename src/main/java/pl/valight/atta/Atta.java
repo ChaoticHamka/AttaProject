@@ -114,6 +114,25 @@ public class Atta {
             }
         }
 
+        String pictureLinks = "";
+
+        try {
+            try {
+                Elements pictures = doc.getElementById("product-main-sm-slider").getElementsByTag("img");
+                for (Element picture : pictures) {
+                    pictureLinks += picture.attribute("src").getValue().replace("64x64", "600x600") + "|";
+                }
+                pictureLinks.substring(0, pictureLinks.length() - 1);
+            } catch (Exception e) {
+                Elements picture = doc.getElementById("lg-slide").getElementsByTag("img");
+                pictureLinks = picture.getFirst().attribute("src").getValue();
+            }
+        } catch (Exception e) {
+            statusUpdater.accept("Ошибка при извлечении картинок: " + e.getMessage());
+        }
+
+        productData.put("Картинки", pictureLinks);
+
         allPagesData.put(href, productData);
 
 //        String nameString = "";
