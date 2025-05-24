@@ -15,10 +15,17 @@ import org.openqa.selenium.chrome.ChromeOptions;
 
 import java.io.*;
 import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.function.Consumer;
 
 public class Atta {
+
+    @FunctionalInterface
+    public interface ProgressReporter {
+        void report(String status, int processedCount);
+    }
 
     private static WebDriver driver;
 //    private static final String MAIN_SEARCH_INPUT_ID = "desktop-search-input";
@@ -29,9 +36,11 @@ public class Atta {
     private static Consumer<String> statusUpdater;
     private static String inputPath;
     private static String outputPath;
+    private final ProgressReporter reporter;
 
-    public Atta(Consumer<String> status, String inputPath, String outputPath) {
-        statusUpdater = status;
+    public Atta(Consumer<String> statusUpdater, ProgressReporter reporter, String inputPath, String outputPath) {
+        this.statusUpdater = statusUpdater;
+        this.reporter = reporter;
         this.inputPath = inputPath;
         this.outputPath = outputPath;
     }
@@ -44,21 +53,36 @@ public class Atta {
         options.addArguments("--start-maximized");
         options.addArguments("--headless=new");
 
+        statusUpdater.accept("Открываем браузер...");
+
         driver = new ChromeDriver(options);
         driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(10));
 
+        int numberEAN = 0;
+        int totalEAN;
+
+        // Сначала читаем все строки в список, исключая пустые
+        List<String> validEans = new ArrayList<>();
         try (BufferedReader reader = new BufferedReader(new FileReader(inputPath))) {
-            String ean;
-
-            int numberEAN = 0;
-
-            // Чтение строк по одной
-            while ((ean = reader.readLine()) != null) {
-                search(ean);
-                numberEAN++;
-                statusUpdater.accept("Собраны данные по ШК №" + numberEAN + " " + ean);
+            String line;
+            while ((line = reader.readLine()) != null) {
+                line = line.trim();
+                if (!line.isEmpty()) {
+                    validEans.add(line);
+                }
             }
 
+            totalEAN = validEans.size();
+
+            for (String ean : validEans) {
+                search(ean);
+                numberEAN++;
+
+                String verb = getVerbForm(numberEAN); // Обработана / Обработано / Обработаны
+                String noun = getWordForm(numberEAN, "строка", "строки", "строк"); // строка / строки / строк
+//                statusUpdater.accept(verb + " " + numberEAN + " " + noun + " из " + totalEAN);
+                reporter.report(verb + " " + numberEAN + " " + noun + " из " + totalEAN, numberEAN);
+            }
             saveAsExcel();
 
         } catch (IOException e) {
@@ -67,6 +91,28 @@ public class Atta {
             throw new RuntimeException(e);
         } finally {
             driver.quit();
+        }
+    }
+
+    private static String getVerbForm(int number) {
+        int n = number % 100;
+        if (n == 1 || (n % 10 == 1 && n != 11)) return "Обработана";
+        if ((n % 10 >= 2 && n % 10 <= 4) && !(n >= 12 && n <= 14)) return "Обработаны";
+        return "Обработано";
+    }
+
+    private static String getWordForm(int number, String one, String few, String many) {
+        int n = number % 100;
+        if (n >= 11 && n <= 14) return many;
+        switch (number % 10) {
+            case 1:
+                return one;
+            case 2:
+            case 3:
+            case 4:
+                return few;
+            default:
+                return many;
         }
     }
 
@@ -122,7 +168,7 @@ public class Atta {
                 for (Element picture : pictures) {
                     pictureLinks += picture.attribute("src").getValue().replace("64x64", "600x600") + "|";
                 }
-                pictureLinks.substring(0, pictureLinks.length() - 1);
+                pictureLinks = pictureLinks.substring(0, pictureLinks.length() - 1);
             } catch (Exception e) {
                 Elements picture = doc.getElementById("lg-slide").getElementsByTag("img");
                 pictureLinks = picture.getFirst().attribute("src").getValue();
@@ -198,17 +244,24 @@ public class Atta {
 
         statusUpdater.accept("Создание Excel-файла...");
 
+        // Текущее время
+        LocalDateTime now = LocalDateTime.now();
+        // Формат: год-месяц-день-часы-минуты
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm");
+        // Применяем формат
+        String formattedDateTime = now.format(formatter);
+
+        String fileExcelName = "AttaData " + formattedDateTime + ".xlsx";
+
         // Сохраняем Excel-файл
-        try (FileOutputStream fileOut = new FileOutputStream(outputPath + File.separator + "output_with_urls.xlsx")) {
+        try (FileOutputStream fileOut = new FileOutputStream(outputPath + File.separator + fileExcelName)) {
             workbook.write(fileOut);
-            statusUpdater.accept("Excel сохранён: " + outputPath + File.separator + "output_with_urls.xlsx");
+            statusUpdater.accept("Excel сохранён как " + fileExcelName);
         } catch (Exception e) {
             e.printStackTrace();
             statusUpdater.accept("Ошибка при сохранении Excel: " + e.getMessage());
         }
 
         workbook.close();
-
-        statusUpdater.accept("Excel сохранён как output_with_urls.xlsx");
     }
 }

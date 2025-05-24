@@ -2,7 +2,11 @@ package pl.valight.atta;
 
 import javax.swing.*;
 import java.awt.*;
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 public class StartForm {
@@ -10,12 +14,19 @@ public class StartForm {
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
             JFrame frame = new JFrame("Сбор данных Атты");
-            frame.setSize(600, 250);
+
+            // Кнопка запуска
+            JButton runButton = new JButton("Запустить сбор данных");
+
+            // Метки статуса
+            JLabel statusLabel = new JLabel("Готов к запуску");
+            JLabel timeEstimateLabel = new JLabel();
+
+            JProgressBar progressBar = new JProgressBar();
+
+            frame.setSize(600, 300);
             frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
             frame.setLayout(new BorderLayout());
-
-            JLabel statusLabel = new JLabel("Готов к запуску");
-            JButton runButton = new JButton("Запустить сбор данных");
 
             // Поля выбора файлов
             JTextField inputFileField = new JTextField();
@@ -68,12 +79,48 @@ public class StartForm {
                 }
 
                 SwingWorker<Void, String> worker = new SwingWorker<>() {
+
+                    private long startTime;
+                    private int totalLines = 0;
+
                     @Override
                     protected Void doInBackground() {
                         try {
                             publish("Открываем браузер...");
-                            Atta atta = new Atta(msg -> publish(msg), inputPath, outputPath);
+
+                            startTime = System.currentTimeMillis();
+
+                            // Сначала читаем все строки в список, исключая пустые
+                            List<String> validEans = new ArrayList<>();
+                            try (BufferedReader reader = new BufferedReader(new FileReader(inputPath))) {
+                                String line;
+                                while ((line = reader.readLine()) != null) {
+                                    line = line.trim();
+                                    if (!line.isEmpty()) {
+                                        validEans.add(line);
+                                    }
+                                }
+                                totalLines = validEans.size();
+                            } catch (IOException e) {
+                                publish("status:" + "Ошибка при чтении файла: " + e.getMessage());
+                            }
+
+                            Atta atta = new Atta(msg -> publish(msg), (msg, processed) -> {
+                                publish("status:" + msg);
+                                publish("progress:" + processed);
+
+                                // ETA
+                                long elapsed = System.currentTimeMillis() - startTime;
+                                if (processed > 0) {
+                                    long totalEstimated = elapsed * totalLines / processed;
+                                    long eta = totalEstimated - elapsed;
+                                    long minutes = eta / 60000;
+                                    long seconds = (eta / 1000) % 60;
+                                    publish(String.format("eta:Осталось примерно %d мин. %d сек.", minutes, seconds));
+                                }
+                            }, inputPath, outputPath);
                             atta.runAttaDataSearch(); // вызываем логику
+
                         } catch (Exception ex) {
                             ex.printStackTrace();
                             publish("Ошибка: " + ex.getMessage());
@@ -83,14 +130,36 @@ public class StartForm {
 
                     @Override
                     protected void process(List<String> chunks) {
-                        // Обновляем статус на последнее сообщение
-                        String latest = chunks.get(chunks.size() - 1);
-                        statusLabel.setText(latest);
+                        for (String msg : chunks) {
+                            if (msg.startsWith("status:")) {
+                                statusLabel.setText(msg.substring(7));
+                            } else if (msg.startsWith("progress:")) {
+                                int processed = Integer.parseInt(msg.substring(9));
+                                int percent = (int) ((processed * 100.0) / totalLines);
+                                progressBar.setValue(percent);
+                            } else if (msg.startsWith("eta:")) {
+                                timeEstimateLabel.setText(msg.substring(4));
+                            } else {
+                                // Показываем все остальные сообщения как статус
+                                statusLabel.setText(msg);
+                            }
+                        }
                     }
 
                     @Override
                     protected void done() {
                         runButton.setEnabled(true); // Разблокируем кнопку
+                        timeEstimateLabel.setText(""); // Очищаем поле с оценкой времени
+                    }
+
+                    private int countLines(File file) {
+                        int lines = 0;
+                        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+                            while (reader.readLine() != null) lines++;
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                        return lines;
                     }
                 };
 
@@ -99,7 +168,7 @@ public class StartForm {
 
             // Панель для выбора исходного файла
             JPanel inputPanel = new JPanel(new BorderLayout(5, 5));
-            inputPanel.setBorder(BorderFactory.createTitledBorder("TXT-файл"));
+            inputPanel.setBorder(BorderFactory.createTitledBorder("TXT-файл со штрихкодами"));
             inputPanel.add(inputFileField, BorderLayout.CENTER);
             inputPanel.add(browseInputButton, BorderLayout.EAST);
 
@@ -109,9 +178,16 @@ public class StartForm {
             outputPanel.add(outputDirField, BorderLayout.CENTER);
             outputPanel.add(browseOutputButton, BorderLayout.EAST);
 
-            // Горизонтальная панель: label слева, кнопка справа
+            // Панель с двумя метками слева
+            JPanel labelPanel = new JPanel();
+            labelPanel.setLayout(new BoxLayout(labelPanel, BoxLayout.Y_AXIS));
+            labelPanel.add(statusLabel);
+            labelPanel.add(Box.createVerticalStrut(5)); // небольшое расстояние между строками
+            labelPanel.add(timeEstimateLabel);
+
+            // Нижняя панель: слева метки, справа кнопка
             JPanel bottomPanel = new JPanel(new BorderLayout(10, 10));
-            bottomPanel.add(statusLabel, BorderLayout.WEST);
+            bottomPanel.add(labelPanel, BorderLayout.WEST);
             bottomPanel.add(runButton, BorderLayout.EAST);
 
             // Основной layout
@@ -126,6 +202,13 @@ public class StartForm {
 
             frame.add(mainPanel, BorderLayout.CENTER);
             frame.setLocationRelativeTo(null); // Центр экрана
+
+            progressBar.setStringPainted(true);
+
+            mainPanel.add(Box.createVerticalStrut(10));
+            mainPanel.add(progressBar);
+            mainPanel.add(Box.createVerticalStrut(5));
+
             frame.setVisible(true);
         });
     }
