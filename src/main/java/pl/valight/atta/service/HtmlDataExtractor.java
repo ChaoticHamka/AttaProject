@@ -46,12 +46,21 @@ public class HtmlDataExtractor {
         }
 
         try {
+
             Elements imgs = doc.select("#product-main-sm-slider img");
-            StringBuilder links = new StringBuilder();
-            for (Element img : imgs) {
-                links.append(img.attr("src").replace("64x64", "600x600")).append("|");
+            if (!imgs.isEmpty()) {
+                // Картинок несколько
+                StringBuilder links = new StringBuilder();
+                for (Element img : imgs) {
+                    links.append(img.attr("src").replace("64x64", "600x600")).append("|");
+                }
+                data.put("Картинки", links.toString().replaceAll("\\|$", ""));
+            } else {
+                // Картинка одна
+                Elements picture = doc.select("#lg-slide img");
+                data.put("Картинки", picture.getFirst().attribute("src").getValue());
             }
-            data.put("Картинки", links.toString().replaceAll("\\|$", ""));
+
         } catch (Exception e) {
             statusUpdater.accept("Картинки не найдены: " + e.getMessage());
         }

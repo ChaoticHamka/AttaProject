@@ -1,6 +1,6 @@
 package pl.valight.atta.gui;
 
-import pl.valight.atta.Atta;
+import pl.valight.atta.service.AttaRunner;
 
 import javax.swing.*;
 import java.awt.*;
@@ -107,21 +107,23 @@ public class StartForm {
                                 publish("status:" + "Ошибка при чтении файла: " + e.getMessage());
                             }
 
-                            Atta atta = new Atta(msg -> publish(msg), (msg, processed) -> {
-                                publish("status:" + msg);
-                                publish("progress:" + processed);
+                            AttaRunner runner = new AttaRunner(
+                                    msg -> publish(msg),
+                                    (msg, processed) -> {
+                                        publish("status:" + msg);
+                                        publish("progress:" + processed);
 
-                                // ETA
-                                long elapsed = System.currentTimeMillis() - startTime;
-                                if (processed > 0) {
-                                    long totalEstimated = elapsed * totalLines / processed;
-                                    long eta = totalEstimated - elapsed;
-                                    long minutes = eta / 60000;
-                                    long seconds = (eta / 1000) % 60;
-                                    publish(String.format("eta:Осталось примерно %d мин. %d сек.", minutes, seconds));
-                                }
-                            }, inputPath, outputPath);
-                            atta.runAttaDataSearch(); // вызываем логику
+                                        long elapsed = System.currentTimeMillis() - startTime;
+                                        if (processed > 0) {
+                                            long totalEstimated = elapsed * totalLines / processed;
+                                            long eta = totalEstimated - elapsed;
+                                            long minutes = eta / 60000;
+                                            long seconds = (eta / 1000) % 60;
+                                            publish(String.format("eta:Осталось примерно %d мин. %d сек.", minutes, seconds));
+                                        }
+                                    }
+                            );
+                            runner.run(inputPath, outputPath);
 
                         } catch (Exception ex) {
                             ex.printStackTrace();
