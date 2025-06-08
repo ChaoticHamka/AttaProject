@@ -35,6 +35,17 @@ public class HtmlDataExtractor {
         driver.get(url);
         Document doc = Jsoup.parse(driver.getPageSource());
 
+        try {
+            String category = doc.selectFirst("ul").text();
+            int firstSlash = category.indexOf('/');
+            int lastSlash = category.lastIndexOf('/');
+
+            data.put("Категория", category.substring(firstSlash + 1, lastSlash));
+
+        } catch (Exception e) {
+            statusUpdater.accept("Ошибка получения категории: " + e.getMessage());
+        }
+
         data.put("EAN", doc.selectFirst(".ean").text());
         data.put("Код производителя", doc.selectFirst(".mpn").text());
 
